@@ -10,4 +10,4 @@ Description: Today I started with the Flappy bird as a template. I came up with 
 ### Hour 2
 Date: 9/9/2025
 Time range: 8:30 AM - 9:30 AM
-Description: It's been a while but today I worked on rewriting the image processing of the bird. I forgot to do that yesterday... that's why it was a static screenshot not a GIF. Now, the bird moves properly in 2D! You can see the feature I added in the github repo: ![screenshot]().
+Description: It's been a while but today I worked on rewriting the image processing of the bird. I forgot to do that yesterday... that's why it was a static screenshot not a GIF. Now, the bird moves properly in 2D! You can see the feature I added in the github repo: ![screenshot](images/h2.gif).
