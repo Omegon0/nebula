@@ -116,21 +116,21 @@ module tt_um_vga_example (
   wire hole_active;
 
   // Bird rendering (simple 8x8 square at bird position)
-  assign bird_active = (pix_x >= 100) && (pix_x < 108) && 
-                      (pix_y >= bird_pos[8:0]) && (pix_y < bird_pos[8:0] + 8);
+  assign bird_active = (pix_x >= bird_pos_x[8:0]) && (pix_x < bird_pos_x[8:0] + 8) && 
+                      (pix_y >= bird_pos_y[8:0]) && (pix_y < bird_pos_y[8:0] + 8);
 
   // Pipe rendering
-  wire pipe_visible = (pipe_pos < 640) && (pipe_pos > 0);
-  wire in_pipe_x = pipe_visible && (pix_x >= pipe_pos[9:0]) && (pix_x < pipe_pos[9:0] + 40);
+  // wire pipe_visible = (pipe_pos < 640) && (pipe_pos > 0);
+  // wire in_pipe_x = pipe_visible && (pix_x >= pipe_pos[9:0]) && (pix_x < pipe_pos[9:0] + 40);
   
-  // Top pipe (from 0 to hole_pos)
-  wire top_pipe = in_pipe_x && (pix_y < hole_pos);
+  // // Top pipe (from 0 to hole_pos)
+  // wire top_pipe = in_pipe_x && (pix_y < hole_pos);
   
-  // Bottom pipe (from hole_pos + 100 to bottom of screen)
-  wire bottom_pipe = in_pipe_x && (pix_y > hole_pos + 100);
+  // // Bottom pipe (from hole_pos + 100 to bottom of screen)
+  // wire bottom_pipe = in_pipe_x && (pix_y > hole_pos + 100);
   
-  assign pipe_active = top_pipe || bottom_pipe;
-  assign hole_active = in_pipe_x && (pix_y >= hole_pos) && (pix_y <= hole_pos + 100);
+  // assign pipe_active = top_pipe || bottom_pipe;
+  // assign hole_active = in_pipe_x && (pix_y >= hole_pos) && (pix_y <= hole_pos + 100);
 
   // RGB output logic
   always @(posedge clk) begin
@@ -141,11 +141,11 @@ module tt_um_vga_example (
     end else begin
       if (video_active) begin
         if (bird_active) begin
-          {R, G, B} <= YELLOW;  // Yellow bird
-        end else if (pipe_active) begin
-          {R, G, B} <= GREEN;   // Green pipes
-        end else if (hole_active) begin
-          {R, G, B} <= BLUE;    // Blue hole area (for visibility)
+          {R, G, B} <= PURPLE;  // Yellow bird
+        // end else if (pipe_active) begin
+        //   {R, G, B} <= GREEN;   // Green pipes
+        // end else if (hole_active) begin
+        //   {R, G, B} <= BLUE;    // Blue hole area (for visibility)
         end else begin
           {R, G, B} <= BLACK;   // Black background
         end
@@ -166,15 +166,14 @@ module gameControl (
     output reg [7:0] score
 );
 
-    reg [8:0] bird_vert_velocity;
-    reg [7:0] next_hole_pos;
-    reg has_flapped;
     reg game_over;
     reg restart_game;
     
     reg has_updated_during_current_v_sync;
     reg update_pulse;
     
+    reg [15:0] scrambled;
+
     always @(posedge clock)
     begin
         if(!reset || v_sync)
@@ -198,67 +197,45 @@ module gameControl (
     begin
         if(!reset || restart_game)
         begin
-            bird_pos <= 9'd265;
-            hole_pos <= 9'd165;
-            pipe_pos <= 10'd600;
-            next_hole_pos <= 8'd0;
+            bird_pos_y <= 9'd265;
+            bird_pos_x <= 10'd265;
+            warp_pos_x <= 9'd165;
+            warp_pos_y <= 10'd600;
             score <= 8'd0;
-            
-            bird_vert_velocity <= 9'd0;
-            has_flapped <= 1'b0;
             game_over <= 1'b0;
             restart_game <= 1'b0;
         end
         else if(update_pulse) begin
             if(!game_over)
             begin
-                if(!button && !has_flapped)
+                if(button_up)
                 begin
-                    bird_vert_velocity <= 9'd501;
-                    has_flapped <= 1'b1;
+                  bird_pos_y <= bird_pos_y - 8;
                 end
-                else 
+                if(button_down)
                 begin
-                    if(button)
-                        has_flapped <= 1'b0;
-                    bird_vert_velocity <= bird_vert_velocity + 9'd1;
+                  bird_pos_y <= bird_pos_y + 8;
                 end
-                
-                bird_pos <= bird_pos + bird_vert_velocity;
-                
-                next_hole_pos <= next_hole_pos + bird_pos[7:0];
-                
-                if(pipe_pos == 10'd0)
+                if(button_left)
                 begin
-                    pipe_pos <= 10'd740;
-                    hole_pos <= {1'b0, next_hole_pos} + 9'd37;
+                  bird_pos_x <= bird_pos_x - 8;
+                end
+                if(button_right)
+                begin
+                  bird_pos_x <= bird_pos_x + 8;
+                end
+
+                if(warp_pos_x == bird_pos_x && warp_pos_y == bird_pos_y)
+                begin
+                    scrambled <= (bird_pos_x * 16'hBEEF) ^ (bird_pos_x << 5);
+                    warp_pos_y <= 9'd50 + scrambled[8:0] % 9'd200;
                     score <= score + 8'd1;
-                end
-                else
-                begin
-                    pipe_pos <= pipe_pos - 10'd4;
                 end
                 
                 // Collision detection: bird hits ground OR bird hits pipe
                 // Bird is at x=100, so check when pipe is at bird's x position (100-140 range for 40px wide pipe)
-                if(bird_pos > 9'd472 || bird_pos < 9'd8 || 
-                   (pipe_pos <= 10'd140 && pipe_pos >= 10'd60 && 
-                    !(bird_pos >= hole_pos && bird_pos <= hole_pos + 9'd92)))
+                if((bird_pos_x == enemy_one_x && bird_pos_y == enemy_one_y) || (bird_pos_x ==   enemy_two_x && bird_pos_y == enemy_two_y))
                     game_over <= 1'b1;
-            end
-            else if(!button && !has_flapped)
-            begin
-                game_over <= 1'b0;
-                restart_game <= 1'b1;
-            end
-            else 
-            begin
-                if(button)
-                    has_flapped <= 1'b0;
-                
-                bird_pos <= 9'd265;
-                pipe_pos <= 10'd600;
-                hole_pos <= 9'd165;
             end
         end
     end
