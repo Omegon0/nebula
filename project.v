@@ -72,19 +72,33 @@ module tt_um_vga_example (
   );
 
   // Game control signals
-  wire [8:0] bird_pos;
-  wire [8:0] hole_pos;
-  wire [9:0] pipe_pos;
+  wire [9:0] bird_pos_x;
+  wire [8:0] bird_pos_y;
+  wire [9:0] warp_pos_x;
+  wire [8:0] warp_pos_y;
+  wire [9:0] enemy_one_x;
+  wire [8:0] enemy_one_y;
+  wire [9:0] enemy_two_x;
+  wire [8:0] enemy_two_y;
   wire [7:0] score;
 
   gameControl game_ctrl (
       .clock(clk),
       .reset(rst_n),
       .v_sync(vsync),
-      .button(inp_up),  // Use UP button for flapping
-      .bird_pos(bird_pos),
-      .hole_pos(hole_pos),
-      .pipe_pos(pipe_pos),
+      .button_up(inp_up),  // Use UP button for flapping
+      .button_down(inp_down),  // Use UP button for flapping
+      .button_left(inp_left),  // Use UP button for flapping
+      .button_right(inp_right),  // Use UP button for flapping
+      .button_slice(inp_x),  // Use UP button for flapping
+      .bird_pos_x(bird_pos_x),
+      .bird_pos_y(bird_pos_y),
+      .warp_pos_x(warp_pos_x),
+      .warp_pos_y(warp_pos_y),
+      .enemy_one_x(enemy_one_x),
+      .enemy_one_y(enemy_one_y),
+      .enemy_two_x(enemy_two_x),
+      .enemy_two_y(enemy_two_y),
       .score(score)
   );
 
@@ -94,6 +108,7 @@ module tt_um_vga_example (
   localparam [5:0] WHITE = {2'b11, 2'b11, 2'b11};
   localparam [5:0] YELLOW = {2'b11, 2'b11, 2'b00};
   localparam [5:0] BLUE = {2'b00, 2'b00, 2'b11};
+  localparam [5:0] PURPLE = {2'b10, 2'b00, 2'b11};
 
   // Game object detection
   wire bird_active;
@@ -144,11 +159,13 @@ endmodule
 
 // Game Control Module (your provided logic with minor adjustments)
 module gameControl (
-    input wire clock, reset, v_sync, button,
-    output reg [8:0] bird_pos, hole_pos,
-    output reg [9:0] pipe_pos,
+    input wire clock, reset, v_sync, 
+    button_up, button_down, button_left, button_right, button_slice, 
+    output reg [8:0] bird_pos_y, warp_pos_y, enemy_one_y, enemy_two_y, 
+    output reg [9:0] bird_pos_x, warp_pos_x, enemy_one_x, enemy_two_x, 
     output reg [7:0] score
 );
+
     reg [8:0] bird_vert_velocity;
     reg [7:0] next_hole_pos;
     reg has_flapped;
