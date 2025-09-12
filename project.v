@@ -71,15 +71,24 @@ module tt_um_vga_example (
       .r(inp_r)
   );
 
+  wire [15:0] pseudorandom;
+  // RNG signals
+  lfsr_16 lsfr (
+    .clk(clk),
+    .rst_n(rst_n),
+    .rnd(pseudorandom)
+  );
+
+
   // Game control signals
   wire [9:0] bird_pos_x;
   wire [8:0] bird_pos_y;
+  wire [9:0] bird_vx;
+  wire [8:0] bird_vy;
   wire [9:0] warp_pos_x;
   wire [8:0] warp_pos_y;
-  wire [9:0] enemy_one_x;
-  wire [8:0] enemy_one_y;
-  wire [9:0] enemy_two_x;
-  wire [8:0] enemy_two_y;
+  wire [9:0] asteroid_x;
+  wire [8:0] asteroid_y;
   wire [7:0] score;
 
   gameControl game_ctrl (
@@ -93,12 +102,13 @@ module tt_um_vga_example (
       .button_slice(inp_x),  // Use UP button for flapping
       .bird_pos_x(bird_pos_x),
       .bird_pos_y(bird_pos_y),
+      .bird_vx(bird_vx),
+      .bird_vy(bird_vy),
       .warp_pos_x(warp_pos_x),
       .warp_pos_y(warp_pos_y),
-      .enemy_one_x(enemy_one_x),
-      .enemy_one_y(enemy_one_y),
-      .enemy_two_x(enemy_two_x),
-      .enemy_two_y(enemy_two_y),
+      .asteroid_x(asteroid_x),
+      .asteroid_y(asteroid_y),
+      .random(pseudorandom),
       .score(score)
   );
 
@@ -161,14 +171,17 @@ endmodule
 module gameControl (
     input wire clock, reset, v_sync, 
     button_up, button_down, button_left, button_right, button_slice, 
-    output reg [8:0] bird_pos_y, warp_pos_y, enemy_one_y, enemy_two_y, 
-    output reg [9:0] bird_pos_x, warp_pos_x, enemy_one_x, enemy_two_x, 
+    input reg [15:0] random, 
+    output reg [8:0] bird_pos_y, warp_pos_y, asteroid_y, bird_vy,
+    output reg [9:0] bird_pos_x, warp_pos_x, asteroid_x, bird_vx,
     output reg [7:0] score
 );
 
     reg game_over;
     reg restart_game;
     
+    reg [1:0] decay;
+
     reg has_updated_during_current_v_sync;
     reg update_pulse;
     
@@ -199,8 +212,11 @@ module gameControl (
         begin
             bird_pos_y <= 9'd265;
             bird_pos_x <= 10'd265;
+            bird_vx <= 10'd20;
+            bird_vy <= 9'd20;
             warp_pos_x <= 9'd165;
             warp_pos_y <= 10'd600;
+            decay <= 2'd0;
             score <= 8'd0;
             game_over <= 1'b0;
             restart_game <= 1'b0;
@@ -208,33 +224,80 @@ module gameControl (
         else if(update_pulse) begin
             if(!game_over)
             begin
+                decay <= decay + 1;
                 if(button_up)
                 begin
                   bird_pos_y <= bird_pos_y - 8;
+                  if(bird_vy > 4)
+                  begin
+                    bird_vy <= bird_vy - 2;
+                  end
                 end
                 if(button_down)
                 begin
                   bird_pos_y <= bird_pos_y + 8;
+                  if(bird_vy < 36)
+                  begin
+                    bird_vy <= bird_vy + 2;
+                  end
                 end
                 if(button_left)
                 begin
                   bird_pos_x <= bird_pos_x - 8;
+                  if(bird_vx > 4)
+                  begin
+                    bird_vx <= bird_vx - 2;
+                  end
                 end
                 if(button_right)
                 begin
                   bird_pos_x <= bird_pos_x + 8;
+                  if(bird_vx < 36)
+                  begin
+                    bird_vx <= bird_vx + 2;
+                  end
                 end
 
-                if(warp_pos_x == bird_pos_x && warp_pos_y == bird_pos_y)
+                if(decay == 0)
                 begin
-                    scrambled <= (bird_pos_x * 16'hBEEF) ^ (bird_pos_x << 5);
-                    warp_pos_y <= 9'd50 + scrambled[8:0] % 9'd200;
-                    score <= score + 8'd1;
+                  if(!button_right && !button_left)
+                  begin
+                    if(bird_vx > 20)
+                    begin
+                      bird_vx <= bird_vx - 1;
+                    end 
+                    if(bird_vx < 20)
+                    begin
+                      bird_vx <= bird_vx + 1;
+                    end
+                  end
+                  if(!button_up && !button_down)
+                  begin
+                    if(bird_vy > 20)
+                    begin
+                      bird_vy <= bird_vy - 1;
+                    end 
+                    if(bird_vy < 20)
+                    begin
+                      bird_vy <= bird_vy + 1;
+                    end
+                  end
                 end
+
+                bird_pos_x <= bird_pos_x + (-20 + bird_vx);
+                bird_pos_y <= bird_pos_y + (-20 + bird_vy);
+
+
+                // if(warp_pos_x == bird_pos_x && warp_pos_y == bird_pos_y)
+                // begin
+                //     scrambled <= (bird_pos_x * 16'hBEEF) ^ (bird_pos_x << 5);
+                //     warp_pos_y <= 9'd50 + scrambled[8:0] % 9'd200;
+                //     score <= score + 8'd1;
+                // end
                 
                 // Collision detection: bird hits ground OR bird hits pipe
                 // Bird is at x=100, so check when pipe is at bird's x position (100-140 range for 40px wide pipe)
-                if((bird_pos_x == enemy_one_x && bird_pos_y == enemy_one_y) || (bird_pos_x ==   enemy_two_x && bird_pos_y == enemy_two_y))
+                if((bird_pos_x == asteroid_x && bird_pos_y == asteroid_y))
                     game_over <= 1'b1;
             end
         end
@@ -550,4 +613,35 @@ module gamepad_pmod_dual (
       .is_present(is_present[1])
   );
 
+endmodule
+
+module lfsr_16 (
+    input  wire       clk,
+    input  wire       rst_n,
+    output reg [15:0] rnd
+);
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            rnd <= 16'hACE1;  // non-zero seed
+        end else begin
+            // taps: 16,14,13,11 (maximal length polynomial)
+            rnd <= {rnd[14:0], rnd[15] ^ rnd[13] ^ rnd[12] ^ rnd[10]};
+        end
+    end
+
+endmodule
+
+module object_collision (
+    input  wire [9:0] ax, ay,
+    input  wire [9:0] aw, ah,
+    input  wire [9:0] bx, by,
+    input  wire [9:0] bw, bh,
+    output wire       overlap
+);
+    // check A left < B right  && A right > B left && similar for Y
+    assign overlap = (ax < (bx + bw)) &&
+                     ((ax + aw) > bx) &&
+                     (ay < (by + bh)) &&
+                     ((ay + ah) > by);
 endmodule
